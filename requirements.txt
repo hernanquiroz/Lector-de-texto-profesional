@@ -1,0 +1,6 @@
+streamlit>=1.28.0
+pdfplumber>=0.10.0
+pandas>=2.0.0
+requests>=2.31.0
+audio-recorder-streamlit>=0.0.10
+gTTS>=2.5.0

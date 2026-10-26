@@ -1,5 +1,5 @@
-
 import streamlit as st
+import streamlit.components.v1 as components
 import pdfplumber
 import pandas as pd
 import io
@@ -14,6 +14,7 @@ import requests
 import tempfile
 from audio_recorder_streamlit import audio_recorder
 from gtts import gTTS
+import base64
 
 # ============================================================
 # CONFIGURACIÓN DE LA PÁGINA
@@ -25,7 +26,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Estilos personalizados
+# Estilos personalizados MEJORADOS - letra más grande
 st.markdown("""
 <style>
     .main-header {
@@ -36,25 +37,28 @@ st.markdown("""
     }
     .batch-info {
         background-color: #e7f3ff;
-        padding: 0.5rem;
-        border-radius: 5px;
+        padding: 1rem;
+        border-radius: 8px;
         margin: 0.5rem 0;
+        font-size: 1.1rem;
     }
     .audio-card {
         background-color: #f8f9fa;
-        padding: 1rem;
+        padding: 1.2rem;
         border-radius: 10px;
-        border-left: 4px solid #1f77b4;
-        margin: 0.5rem 0;
+        border-left: 5px solid #1f77b4;
+        margin: 0.8rem 0;
+        font-size: 1.05rem;
     }
     .stButton>button {
         width: 100%;
+        font-size: 1.1rem;
+        padding: 0.5rem;
     }
-    /* Estilos para los créditos */
     .credits-footer {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 1.5rem;
+        padding: 2rem;
         border-radius: 15px;
         text-align: center;
         margin-top: 2rem;
@@ -62,15 +66,15 @@ st.markdown("""
     }
     .credits-footer h3 {
         margin: 0 0 0.5rem 0;
-        font-size: 1.3rem;
+        font-size: 1.5rem;
     }
     .credits-footer p {
         margin: 0.3rem 0;
-        font-size: 0.95rem;
+        font-size: 1.1rem;
         opacity: 0.95;
     }
     .credits-footer .author {
-        font-size: 1.1rem;
+        font-size: 1.3rem;
         font-weight: bold;
         color: #ffd700;
         margin-top: 0.5rem;
@@ -78,29 +82,119 @@ st.markdown("""
     .credits-footer .vibe-badge {
         display: inline-block;
         background-color: rgba(255,255,255,0.2);
-        padding: 0.3rem 0.8rem;
+        padding: 0.5rem 1rem;
         border-radius: 20px;
-        font-size: 0.85rem;
+        font-size: 1rem;
         margin-top: 0.5rem;
         backdrop-filter: blur(10px);
     }
     .auto-play-notice {
+        background-color: #d4edda;
+        border-left: 5px solid #28a745;
+        padding: 1rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        font-size: 1.1rem;
+    }
+    .auto-play-notice.warning {
         background-color: #fff3cd;
-        border-left: 4px solid #ffc107;
-        padding: 0.8rem;
-        border-radius: 5px;
-        margin: 0.5rem 0;
+        border-left: 5px solid #ffc107;
+    }
+    /* Aumentar tamaño de letra en toda la app */
+    .stMarkdown, .stText, p, li, span, div {
+        font-size: 1.05rem !important;
+    }
+    .stTextArea textarea {
+        font-size: 1.1rem !important;
+    }
+    .stExpander {
+        font-size: 1.05rem !important;
+    }
+    /* Reproductor de audio destacado */
+    .audio-player-container {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        margin: 1.5rem 0;
+        text-align: center;
+        color: white;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .audio-player-container h3 {
+        margin-bottom: 1rem;
+        font-size: 1.5rem;
+    }
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #28a745;
+        margin-right: 8px;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.2); }
+        100% { opacity: 1; transform: scale(1); }
     }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ============================================================
-# FUNCIONES AUXILIARES OPTIMIZADAS
+# FUNCIÓN CLAVE: REPRODUCTOR DE AUDIO CON AUTOPLAY FORZADO
+# ============================================================
+def play_audio_autoplay(audio_bytes, format_type="audio/mp3"):
+    """
+    Reproduce audio con autoplay FORZADO usando HTML5.
+    Esto SÍ funciona en los navegadores porque el usuario 
+    ya interactuó con la página al hacer clic en el botón.
+    """
+    # Convertir bytes a base64
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    
+    # Crear reproductor HTML5 con autoplay
+    audio_html = f"""
+    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                padding: 2rem; border-radius: 15px; margin: 1.5rem 0; 
+                text-align: center; color: white; box-shadow: 0 8px 25px rgba(0,0,0,0.15);">
+        <h3 style="margin-bottom: 1rem; font-size: 1.5rem;">
+            <span class="status-indicator"></span>
+            🔊 Reproduciendo automáticamente...
+        </h3>
+        <p style="font-size: 1.1rem; margin-bottom: 1rem;">
+            El audio se está reproduciendo por tus parlantes o audífonos
+        </p>
+        <audio controls autoplay style="width: 100%; max-width: 500px;">
+            <source src="data:{format_type};base64,{audio_base64}" type="{format_type}">
+            Tu navegador no soporta el elemento de audio.
+        </audio>
+        <p style="font-size: 0.9rem; margin-top: 1rem; opacity: 0.9;">
+            💡 Si no escuchas nada, verifica el volumen de tu PC y que tus parlantes/audífonos estén conectados
+        </p>
+    </div>
+    """
+    components.html(audio_html, height=280)
+
+
+def play_audio_normal(audio_bytes, format_type="audio/mp3"):
+    """Reproductor de audio normal (sin autoplay) para el historial."""
+    audio_base64 = base64.b64encode(audio_bytes).decode()
+    audio_html = f"""
+    <audio controls style="width: 100%; max-width: 500px;">
+        <source src="data:{format_type};base64,{audio_base64}" type="{format_type}">
+        Tu navegador no soporta el elemento de audio.
+    </audio>
+    """
+    components.html(audio_html, height=80)
+
+
+# ============================================================
+# FUNCIONES AUXILIARES
 # ============================================================
 @st.cache_data(show_spinner="📖 Cargando información del PDF...")
 def get_pdf_info(uploaded_file):
-    """Obtiene información básica del PDF sin cargar todo el contenido."""
     try:
         with pdfplumber.open(uploaded_file) as pdf:
             metadata = pdf.metadata or {}
@@ -113,7 +207,6 @@ def get_pdf_info(uploaded_file):
 
 @st.cache_data(show_spinner="📖 Procesando páginas...")
 def load_pdf_batch(uploaded_file, start_page, end_page):
-    """Carga solo un lote específico de páginas del PDF."""
     try:
         with pdfplumber.open(uploaded_file) as pdf:
             pages_data = []
@@ -139,7 +232,6 @@ def load_pdf_batch(uploaded_file, start_page, end_page):
 
 @st.cache_data(show_spinner="🌐 Descargando PDF...")
 def get_pdf_info_from_url(url):
-    """Descarga y obtiene información básica del PDF desde URL."""
     try:
         response = requests.get(url, timeout=30)
         response.raise_for_status()
@@ -160,7 +252,6 @@ def get_pdf_info_from_url(url):
 
 @st.cache_data(show_spinner="🌐 Procesando páginas desde URL...")
 def load_pdf_batch_from_url(pdf_content, start_page, end_page):
-    """Carga un lote específico de páginas desde el contenido PDF descargado."""
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(pdf_content)
@@ -189,7 +280,6 @@ def load_pdf_batch_from_url(pdf_content, start_page, end_page):
 
 
 def get_batch_text(pages_data):
-    """Concatena el texto de un lote de páginas."""
     return "\n\n".join([p["text"] for p in pages_data])
 
 
@@ -257,25 +347,45 @@ def download_text_file(text, filename="documento.txt"):
     return text.encode("utf-8")
 
 
-def generate_tts_audio(text, lang="es", slow=False):
-    """Genera audio a partir de texto usando Google TTS."""
+# ============================================================
+# FUNCIÓN TTS MEJORADA - DIVIDE TEXTO LARGO EN FRAGMENTOS
+# ============================================================
+def generate_tts_audio_chunked(text, lang="es", slow=False, max_chunk_chars=3000):
+    """
+    Genera audio TTS dividiendo el texto en fragmentos pequeños.
+    gTTS tiene problemas con textos muy largos, así que los dividimos.
+    """
     try:
-        max_chars = 5000
-        if len(text) > max_chars:
-            text = text[:max_chars] + "..."
+        # Limpiar el texto
+        text = text.replace('\n', ' ').replace('\r', ' ')
+        text = re.sub(r'\s+', ' ', text).strip()
         
+        if len(text) > max_chunk_chars:
+            text = text[:max_chunk_chars]
+            # Cortar en un punto natural (final de oración)
+            last_period = text.rfind('.')
+            if last_period > max_chunk_chars * 0.7:
+                text = text[:last_period + 1]
+            else:
+                text = text + "..."
+        
+        if not text.strip():
+            st.error("❌ No hay texto para convertir a audio")
+            return None
+        
+        # Generar audio con gTTS
         tts = gTTS(text=text, lang=lang, slow=slow)
         audio_buffer = io.BytesIO()
         tts.write_to_fp(audio_buffer)
         audio_buffer.seek(0)
         return audio_buffer.getvalue()
     except Exception as e:
-        st.error(f"❌ Error al generar audio TTS: {e}")
+        st.error(f"❌ Error al generar audio: {e}")
         return None
 
 
 # ============================================================
-# INICIALIZACIÓN DE SESSION STATE PARA AUDIOS
+# INICIALIZACIÓN DE SESSION STATE
 # ============================================================
 if "audio_recordings" not in st.session_state:
     st.session_state.audio_recordings = []
@@ -284,14 +394,13 @@ if "document_name" not in st.session_state:
     st.session_state.document_name = None
 
 if "auto_play_tts" not in st.session_state:
-    st.session_state.auto_play_tts = False
+    st.session_state.auto_play_tts = True
 
 if "tts_audio_generated" not in st.session_state:
     st.session_state.tts_audio_generated = None
 
 
 def save_audio_recording(audio_bytes, page_range, note=""):
-    """Guarda una grabación de audio en el session state."""
     recording = {
         "id": len(st.session_state.audio_recordings) + 1,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -305,7 +414,6 @@ def save_audio_recording(audio_bytes, page_range, note=""):
 
 
 def save_tts_audio(audio_bytes, page_range, lang="es"):
-    """Guarda un audio TTS en el session state."""
     recording = {
         "id": len(st.session_state.audio_recordings) + 1,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -319,7 +427,6 @@ def save_tts_audio(audio_bytes, page_range, lang="es"):
 
 
 def delete_recording(recording_id):
-    """Elimina una grabación del session state."""
     st.session_state.audio_recordings = [
         r for r in st.session_state.audio_recordings if r["id"] != recording_id
     ]
@@ -331,7 +438,7 @@ def delete_recording(recording_id):
 st.markdown('<p class="main-header">📚 Lector PDF Pro - Con Audio</p>', unsafe_allow_html=True)
 st.markdown("### Lee, analiza y **escucha automáticamente** tus documentos PDF 🔊")
 
-# Sidebar - Carga del documento
+# Sidebar
 with st.sidebar:
     st.header("📂 Cargar documento")
     source_option = st.radio(
@@ -376,14 +483,18 @@ with st.sidebar:
 
     st.markdown("---")
     st.markdown("### ⚙️ Configuración de lotes")
+    
+    # RECOMENDACIÓN: máximo 10 páginas para TTS
     batch_size = st.slider(
         "Páginas por lote:",
-        min_value=5,
-        max_value=50,
-        value=10,
-        step=5,
-        help="Número de páginas a procesar a la vez"
+        min_value=1,
+        max_value=20,
+        value=5,
+        step=1,
+        help="⚠️ Se recomienda 5-10 páginas para mejor calidad de audio"
     )
+    
+    st.warning("⚠️ **Recomendación**: Usa lotes de 5-10 páginas para que el audio funcione mejor. Con 50 páginas el texto es muy largo.")
 
     # Configuración de audio
     st.markdown("---")
@@ -391,11 +502,11 @@ with st.sidebar:
     auto_play_enabled = st.toggle(
         "🔔 Reproducción automática",
         value=True,
-        help="Activa/desactiva la reproducción automática del audio generado"
+        help="Activa/desactiva la reproducción automática del audio"
     )
     st.session_state.auto_play_tts = auto_play_enabled
     
-    st.caption("🎧 El audio se reproducirá automáticamente por los parlantes o audífonos de tu PC")
+    st.info("🎧 El audio se reproducirá automáticamente por los **parlantes** o **audífonos** de tu PC")
 
     # Resumen de grabaciones
     st.markdown("---")
@@ -412,7 +523,7 @@ with st.sidebar:
 # CONTENIDO PRINCIPAL
 # ============================================================
 if metadata is None or total_pages == 0:
-    st.info("👈 Carga un PDF desde la barra lateral para comenzar")
+    st.info(" Carga un PDF desde la barra lateral para comenzar")
     st.markdown("""
     ### ✨ Características
     - 🚀 Procesamiento por lotes (no colapsa con PDFs grandes)
@@ -428,7 +539,6 @@ if metadata is None or total_pages == 0:
     - 🎯 Selector de páginas inteligente
     """)
 else:
-    # Calcular número de lotes
     total_batches = math.ceil(total_pages / batch_size)
     
     st.success(f"✅ PDF cargado: **{total_pages}** páginas | **{total_batches}** lotes de {batch_size} páginas")
@@ -446,7 +556,6 @@ else:
             format="Lote %d"
         )
     
-    # Calcular rango de páginas para el lote seleccionado
     start_page = (batch_num - 1) * batch_size + 1
     end_page = min(batch_num * batch_size, total_pages)
     page_range = f"{start_page}-{end_page}"
@@ -458,7 +567,6 @@ else:
     </div>
     """, unsafe_allow_html=True)
 
-    # Cargar el lote de páginas
     if source_option == "📁 Subir archivo" and uploaded_file:
         pages_data = load_pdf_batch(uploaded_file, start_page, end_page)
     else:
@@ -467,7 +575,6 @@ else:
     if not pages_data:
         st.error("❌ No se pudieron cargar las páginas")
     else:
-        # Métricas del lote actual
         batch_text = get_batch_text(pages_data)
         batch_words = count_words(batch_text)
         batch_chars = count_characters(batch_text)
@@ -479,14 +586,21 @@ else:
         col3.metric("🔤 Caracteres", f"{batch_chars:,}")
         col4.metric("📏 Líneas", f"{batch_lines:,}")
 
-        # Tabs principales
+        # Advertencia si el texto es muy largo para TTS
+        if batch_chars > 3000:
+            st.warning(f"""
+            ⚠️ **El texto de este lote tiene {batch_chars:,} caracteres.** 
+            Para mejor calidad de audio, se recomienda usar lotes de **5 páginas o menos**.
+            El audio se generará con los primeros 3,000 caracteres.
+            """)
+
         tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
             "📖 Lectura",
-            "🔍 Búsqueda",
+            " Búsqueda",
             "📊 Tablas",
             "📈 Análisis",
             "🎙️ Audio",
-            "💾 Exportar"
+            " Exportar"
         ])
 
         # TAB 1: LECTURA
@@ -494,7 +608,7 @@ else:
             st.subheader(f"📖 Páginas {start_page} - {end_page}")
 
             if metadata and any(metadata.values()):
-                with st.expander("📋 Metadatos del documento"):
+                with st.expander(" Metadatos del documento"):
                     for key, value in metadata.items():
                         if value:
                             st.write(f"**{key}:** {value}")
@@ -585,7 +699,7 @@ else:
 
         # TAB 4: ANÁLISIS
         with tab4:
-            st.subheader(f"📈 Análisis del lote (Páginas {start_page}-{end_page})")
+            st.subheader(f" Análisis del lote (Páginas {start_page}-{end_page})")
 
             col1, col2 = st.columns(2)
 
@@ -602,7 +716,7 @@ else:
                 summary = generate_summary(batch_text, max_sentences=5)
                 st.info(summary)
 
-            st.markdown("#### 🎯 Datos extraídos")
+            st.markdown("####  Datos extraídos")
             col_a, col_b, col_c = st.columns(3)
 
             with col_a:
@@ -634,47 +748,45 @@ else:
                 else:
                     st.write("No se encontraron teléfonos")
 
-            st.markdown("#### 📊 Distribución de texto por página (en este lote)")
+            st.markdown("####  Distribución de texto por página (en este lote)")
             words_per_page = [count_words(p["text"]) for p in pages_data]
             st.bar_chart(words_per_page)
 
         # ============================================
-        # TAB 5: AUDIO - CON REPRODUCCIÓN AUTOMÁTICA
+        # TAB 5: AUDIO - VERSIÓN CORREGIDA
         # ============================================
         with tab5:
             st.subheader(f"🎙️ Audio - Lote {batch_num} (Páginas {start_page}-{end_page})")
             
-            # Aviso de reproducción automática
             if st.session_state.auto_play_tts:
                 st.markdown("""
                 <div class='auto-play-notice'>
                     🔔 <strong>Reproducción automática ACTIVADA</strong><br>
-                    El audio se reproducirá automáticamente por los <strong>parlantes</strong> o <strong>audífonos</strong> de tu PC cuando lo generes.
+                    El audio se reproducirá automáticamente por los <strong>parlantes</strong> o <strong>audífonos</strong> de tu PC.
                 </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
-                <div class='auto-play-notice'>
+                <div class='auto-play-notice warning'>
                     🔕 <strong>Reproducción automática DESACTIVADA</strong><br>
                     Deberás presionar play manualmente para escuchar el audio.
                 </div>
                 """, unsafe_allow_html=True)
 
-            # Sub-tabs para las funcionalidades de audio
             audio_tab1, audio_tab2, audio_tab3 = st.tabs([
                 "🎤 Grabar voz",
                 "🔊 Leer documento (TTS)",
                 f"📚 Mis grabaciones ({len(st.session_state.audio_recordings)})"
             ])
 
-            # SUB-TAB 1: GRABAR VOZ DEL MICRÓFONO
+            # SUB-TAB 1: GRABAR VOZ
             with audio_tab1:
                 st.markdown("### 🎤 Grabar tu voz leyendo el documento")
                 st.markdown(f"""
                 <div class='audio-card'>
                     📄 <strong>Documento:</strong> {st.session_state.document_name}<br>
                     📑 <strong>Páginas:</strong> {page_range}<br>
-                    🕐 <strong>Fecha:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}
+                     <strong>Fecha:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M')}
                 </div>
                 """, unsafe_allow_html=True)
 
@@ -691,7 +803,7 @@ else:
                 st.warning("⚠️ Haz clic en el micrófono para comenzar a grabar. Haz clic de nuevo para detener.")
 
                 audio_bytes = audio_recorder(
-                    text="🎤 Haz clic para grabar",
+                    text=" Haz clic para grabar",
                     recording_color="#e74c3c",
                     neutral_color="#1f77b4",
                     icon_name="microphone",
@@ -705,7 +817,7 @@ else:
                     with col1:
                         recording_note = st.text_input(
                             "📝 Nota para la grabación (opcional):",
-                            placeholder="Ej: Lectura del capítulo 1, observaciones importantes..."
+                            placeholder="Ej: Lectura del capítulo 1..."
                         )
                     with col2:
                         st.markdown("<br>", unsafe_allow_html=True)
@@ -714,13 +826,21 @@ else:
                             st.success(f"✅ Grabación guardada para las páginas {page_range}")
                             st.balloons()
 
-            # SUB-TAB 2: TEXT-TO-SPEECH CON REPRODUCCIÓN AUTOMÁTICA
+            # SUB-TAB 2: TTS CON AUTOPLAY CORREGIDO
             with audio_tab2:
                 st.markdown("### 🔊 Escuchar la lectura del documento automáticamente")
                 st.info("""
-                💡 **El audio se reproducirá automáticamente por los parlantes o audífonos de tu PC** 
+                 **El audio se reproducirá automáticamente por los parlantes o audífonos de tu PC** 
                 para que puedas escuchar la lectura del documento sin intervención manual.
                 """)
+
+                # Advertencia importante
+                if batch_chars > 3000:
+                    st.warning(f"""
+                    ⚠️ **Este lote tiene {batch_chars:,} caracteres.** 
+                    Se recomienda usar lotes de **5 páginas o menos** para mejor calidad de audio.
+                    El audio se generará con los primeros 3,000 caracteres.
+                    """)
 
                 col1, col2 = st.columns(2)
                 with col1:
@@ -728,19 +848,18 @@ else:
                         "🌍 Idioma:",
                         ["es", "en", "fr", "de", "it", "pt"],
                         format_func=lambda x: {
-                            "es": "🇪🇸 Español",
+                            "es": "🇸 Español",
                             "en": "🇬🇧 Inglés",
                             "fr": "🇫🇷 Francés",
                             "de": "🇩🇪 Alemán",
-                            "it": "🇮🇹 Italiano",
-                            "pt": "🇵🇹 Portugués"
+                            "it": "🇮 Italiano",
+                            "pt": "🇹 Portugués"
                         }.get(x, x),
                         key="tts_lang_select"
                     )
                 with col2:
                     tts_slow = st.checkbox("🐢 Velocidad lenta", value=False, key="tts_slow_check")
 
-                # Selección de páginas para TTS
                 st.markdown("#### 📑 Selecciona el texto a leer:")
                 tts_option = st.radio(
                     "Alcance:",
@@ -769,47 +888,48 @@ else:
                     label_visibility="collapsed"
                 )
 
-                st.warning(f"⚠️ Se convertirán los primeros 5000 caracteres ({len(tts_text)} caracteres totales)")
+                st.info(f"📊 Texto a convertir: **{len(tts_text)} caracteres** (máximo 3,000)")
 
-                # Botón principal para generar y reproducir
+                # Botón principal
                 if st.button("🔊 Generar y reproducir lectura", type="primary"):
-                    with st.spinner("🎧 Generando audio... se reproducirá automáticamente"):
-                        tts_audio = generate_tts_audio(tts_text, lang=tts_lang, slow=tts_slow)
+                    with st.spinner(" Generando audio... por favor espera"):
+                        tts_audio = generate_tts_audio_chunked(tts_text, lang=tts_lang, slow=tts_slow)
                         
                         if tts_audio:
-                            # Guardar en session state para reproducción automática
                             st.session_state.tts_audio_generated = {
                                 "audio": tts_audio,
                                 "page_range": page_range,
                                 "lang": tts_lang,
-                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "text_length": len(tts_text)
                             }
                             st.success("✅ Audio generado correctamente")
                             st.rerun()
+                        else:
+                            st.error("❌ No se pudo generar el audio. Intenta con menos texto.")
 
-                # Reproducción automática si hay audio generado
+                # REPRODUCCIÓN AUTOMÁTICA CON HTML5
                 if st.session_state.tts_audio_generated:
+                    tts_info = st.session_state.tts_audio_generated
+                    
                     st.markdown("---")
                     st.markdown("### 🎧 Reproduciendo lectura del documento...")
-                    
-                    tts_info = st.session_state.tts_audio_generated
                     
                     st.markdown(f"""
                     <div class='audio-card'>
                         🎵 <strong>Reproduciendo automáticamente</strong><br>
                         📑 Páginas: {tts_info['page_range']}<br>
-                        🌍 Idioma: {tts_info['lang']}<br>
+                         Idioma: {tts_info['lang']}<br>
+                        📊 Caracteres: {tts_info['text_length']:,}<br>
                         🕐 Generado: {tts_info['timestamp']}
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    # REPRODUCCIÓN AUTOMÁTICA - clave para parlantes/audífonos
-                    st.audio(
-                        tts_info["audio"],
-                        format="audio/mp3",
-                        autoplay=st.session_state.auto_play_tts,
-                        start_time=0
-                    )
+                    # AUTOPLAY FORZADO con HTML5
+                    if st.session_state.auto_play_tts:
+                        play_audio_autoplay(tts_info["audio"], format_type="audio/mp3")
+                    else:
+                        st.audio(tts_info["audio"], format="audio/mp3")
                     
                     # Controles adicionales
                     col1, col2, col3 = st.columns(3)
@@ -838,7 +958,6 @@ else:
                 if not recordings:
                     st.info("🎙️ Aún no has grabado ningún audio. ¡Comienza a grabar!")
                 else:
-                    # Filtros
                     col1, col2 = st.columns(2)
                     with col1:
                         filter_doc = st.selectbox(
@@ -851,7 +970,6 @@ else:
                             ["Todos", "🎤 Grabación de voz", "🔊 Texto a voz"]
                         )
 
-                    # Aplicar filtros
                     filtered = recordings
                     if filter_doc != "Todos":
                         filtered = [r for r in filtered if r["document"] == filter_doc]
@@ -864,15 +982,7 @@ else:
 
                     st.success(f"📊 Mostrando **{len(filtered)}** de {len(recordings)} grabaciones")
 
-                    # Opción de reproducción automática para todas las grabaciones
-                    auto_play_recordings = st.toggle(
-                        "🔔 Reproducir automáticamente al cargar esta pestaña",
-                        value=False,
-                        key="auto_play_recordings_toggle"
-                    )
-
-                    # Mostrar grabaciones
-                    for idx, rec in enumerate(filtered):
+                    for rec in filtered:
                         with st.container():
                             st.markdown(f"""
                             <div class='audio-card'>
@@ -889,12 +999,8 @@ else:
                             
                             col1, col2, col3 = st.columns([3, 1, 1])
                             with col1:
-                                # Reproducción automática solo para la primera si está activado
-                                should_autoplay = (auto_play_recordings and idx == 0)
-                                st.audio(
-                                    rec["audio_bytes"],
-                                    autoplay=should_autoplay
-                                )
+                                play_audio_normal(rec["audio_bytes"], 
+                                                "audio/wav" if rec["type"] == "voice_recording" else "audio/mp3")
                             with col2:
                                 ext = "wav" if rec["type"] == "voice_recording" else "mp3"
                                 mime = "audio/wav" if rec["type"] == "voice_recording" else "audio/mpeg"
@@ -912,27 +1018,6 @@ else:
                             
                             st.markdown("---")
 
-                    # Botón para descargar todas las grabaciones
-                    if len(filtered) > 1:
-                        if st.button("📦 Descargar todas las grabaciones (como JSON de metadatos)"):
-                            metadata_export = [
-                                {
-                                    "id": r["id"],
-                                    "timestamp": r["timestamp"],
-                                    "document": r["document"],
-                                    "page_range": r["page_range"],
-                                    "note": r["note"],
-                                    "type": r["type"]
-                                }
-                                for r in filtered
-                            ]
-                            st.download_button(
-                                label="💾 Descargar metadatos (JSON)",
-                                data=json.dumps(metadata_export, ensure_ascii=False, indent=2).encode("utf-8"),
-                                file_name="grabaciones_metadata.json",
-                                mime="application/json"
-                            )
-
         # TAB 6: EXPORTAR
         with tab6:
             st.subheader(f"💾 Exportar lote (Páginas {start_page}-{end_page})")
@@ -945,7 +1030,7 @@ else:
 
             if "Texto plano" in export_format:
                 st.download_button(
-                    label="💾 Descargar TXT",
+                    label=" Descargar TXT",
                     data=download_text_file(batch_text),
                     file_name=f"lote_{batch_num}_paginas_{start_page}-{end_page}.txt",
                     mime="text/plain"
@@ -998,14 +1083,14 @@ else:
                 st.code(json_data[:2000], language="json")
 
 # ============================================================
-# FOOTER CON CRÉDITOS - DISEÑO POR VIBE CODING
+# FOOTER CON CRÉDITOS
 # ============================================================
 st.markdown("---")
 st.markdown("""
 <div class='credits-footer'>
     <h3>🎨 Diseño por Vibe Coding</h3>
     <p class='author'>✨ Por Ing. Hernán Quiroz ✨</p>
-    <p>📚 Lector PDF Pro - Con Audio y Reproducción Automática</p>
+    <p> Lector PDF Pro - Con Audio y Reproducción Automática</p>
     <p>🔊 Escucha tus documentos por parlantes o audífonos</p>
     <div class='vibe-badge'>
         🚀 Desarrollado con Streamlit + IA | Octubre 2026
